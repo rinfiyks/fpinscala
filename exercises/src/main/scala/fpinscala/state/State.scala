@@ -35,6 +35,9 @@ object RNG {
   def doubleViaMap: Rand[Double] =
     map(nonNegativeInt)(_ / (Int.MaxValue.toDouble + 1))
 
+  def boolean(rng: RNG): (Boolean, RNG) =
+    rng.nextInt match { case (i, rng2) => (i % 2 == 0, rng2) }
+
   def nonNegativeInt(rng: RNG): (Int, RNG) = {
     val (n, r) = rng.nextInt
     (if (n < 0) -(n + 1) else n, r)
@@ -171,11 +174,11 @@ object StateTester {
   def main(args: Array[String]): Unit = {
     val r1 = RNG.Simple(2)
 
-    val (n1, r2) = RNG.nonNegativeInt(r1)
+    val (n1, r2) = RNG.int(r1)
     println(n1)
-    val (n2, r3) = RNG.nonNegativeInt(r2)
+    val (n2, r3) = RNG.int(r2)
     println(n2)
-    val (n3, r4) = RNG.nonNegativeInt(r3)
+    val (n3, r4) = RNG.int(r3)
     println(n3)
     val (n4, r5) = RNG.double(r4)
     println(n4)
