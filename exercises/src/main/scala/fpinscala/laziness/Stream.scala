@@ -103,6 +103,10 @@ trait Stream[+A] {
       case (Cons(h1, t1), Cons(h2, t2)) => Some(f(Some(h1()), Some(h2())) -> (t1() -> t2()))
     }
 
+  // special case of `zipWith`
+  def zip[B](s2: Stream[B]): Stream[(A, B)] =
+    zipWithViaUnfold(s2)((_, _))
+
   def startsWith[B](s: Stream[B]): Boolean =
     zipAll(s).takeWhile(!_._2.isEmpty) forAll {
       case (h, h2) => h == h2
