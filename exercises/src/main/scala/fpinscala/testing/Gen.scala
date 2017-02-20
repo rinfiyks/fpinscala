@@ -34,9 +34,31 @@ object GenTester {
   }
 }
 
-trait Prop {
-  def check: Either[(FailedCase, SuccessCount), SuccessCount]
-  def &&(p: Prop): Prop
+case class Prop(run: (MaxSize, TestCases, RNG) => Result) {
+  def &&(p: Prop) = Prop {
+    (m, n, rng) =>
+      run(m, n, rng) match {
+        case Passed => p.run(m, n, rng)
+        case x => x
+      }
+  }
+
+  def ||(p: Prop) = Prop {
+    (m, n, rng) =>
+      run(m, n, rng) match {
+        // In case of failure, run the other prop.
+        case Falsified(msg, _) => p.tag(msg).run(m, n, rng)
+        case x => x
+      }
+  }
+
+  def tag(msg: String) = Prop {
+    (m, n, rng) =>
+      run(m, n, rng) match {
+        case Falsified(e, c) => Falsified(msg + "\n" + e, c)
+        case x => x
+      }
+  }
 }
 
 object Prop {
@@ -57,31 +79,13 @@ object Prop {
     def isFalsified = true
   }
 
-  case class Prop(run: (MaxSize, TestCases, RNG) => Result) {
-    def &&(p: Prop) = Prop {
-      (m, n, rng) =>
-        run(m, n, rng) match {
-          case Passed => p.run(m, n, rng)
-          case x => x
-        }
-    }
-
-    def ||(p: Prop) = Prop {
-      (m, n, rng) =>
-        run(m, n, rng) match {
-          // In case of failure, run the other prop.
-          case Falsified(msg, _) => p.tag(msg).run(m, n, rng)
-          case x => x
-        }
-    }
-
-    def tag(msg: String) = Prop {
-      (m, n, rng) =>
-        run(m, n, rng) match {
-          case Falsified(e, c) => Falsified(msg + "\n" + e, c)
-          case x => x
-        }
-    }
+  def forAll[A](as: Gen[A])(f: A => Boolean): Prop = Prop {
+    (_, n, rng) =>
+      randomStream(as)(rng).zip(Stream.from(0)).take(n).map {
+        case (a, i) => try {
+          if (f(a)) Passed else Falsified(a.toString, i)
+        } catch { case e: Exception => Falsified(buildMsg(a, e), i) }
+      }.find(_.isFalsified).getOrElse(Passed)
   }
 
   def forAll[A](g: SGen[A])(f: A => Boolean): Prop =
@@ -107,6 +111,17 @@ object Prop {
       s"generated an exception: ${e.getMessage}\n" +
       s"stack trace:\n ${e.getStackTrace.mkString("\n")}"
 
+  def run(p: Prop,
+    maxSize: Int = 100,
+    testCases: Int = 100,
+    rng: RNG = RNG.Simple(System.currentTimeMillis)): Unit =
+    p.run(maxSize, testCases, rng) match {
+      case Falsified(msg, n) =>
+        println(s"! Falsified after $n passed tests:\n $msg")
+      case Passed =>
+        println(s"+ OK, passed $testCases tests.")
+    }
+
   def check: Boolean = ???
 
 }
@@ -123,6 +138,12 @@ object Gen {
 
   def listOf[A](g: Gen[A]): SGen[List[A]] =
     SGen(n => g.listOfN(n))
+
+  val smallInt = Gen.choose(-10, 10)
+  val maxProp = forAll(listOf(smallInt)) { l =>
+    val max = l.max
+    !l.exists(_ > max) // No value greater than `max` should exist in `l`
+  }
 
   def boolean: Gen[Boolean] =
     Gen(State(RNG.boolean))
@@ -157,6 +178,8 @@ case class Gen[+A](sample: State[RNG, A]) {
 
   def listOfN(size: Gen[Int]): Gen[List[A]] =
     size flatMap (n => this.listOfN(n))
+
+  def listOf: SGen[List[A]] = Gen.listOf(this)
 
   def unsized = SGen(_ => this)
 
