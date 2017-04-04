@@ -17,12 +17,22 @@ trait Parsers[Parser[+ _]] { // + _ is a type parameter that is itself a type co
 
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]]
 
+  def count[A](c: Char): Parser[Int]
+
+  def countExists[A](c: Char): Parser[Int]
+
   def or[A](s1: Parser[A], s2: Parser[A]): Parser[A]
+
+  def combine[A](s1: Parser[A], s2: Parser[A]): Parser[A]
 
   case class ParserOps[A](p: Parser[A]) {
     def |[B >: A](p2: Parser[B]): Parser[B] = self.or(p, p2)
 
     def or[B >: A](p2: => Parser[B]): Parser[B] = self.or(p, p2)
+
+    def +[B >: A](p2: Parser[B]): Parser[B] = self.combine(p, p2)
+
+    def combine[B >: A](p2: => Parser[B]): Parser[B] = self.combine(p, p2)
   }
 
   object Laws {
