@@ -3,6 +3,7 @@ package fpinscala.parsing
 import fpinscala.testing._
 
 import scala.language.higherKinds
+import scala.util.matching.Regex
 
 trait Parsers[Parser[+ _]] { // + _ is a type parameter that is itself a type constructor
   self => // so inner classes (e.g. ParserOps) may call methods of trait
@@ -10,6 +11,8 @@ trait Parsers[Parser[+ _]] { // + _ is a type parameter that is itself a type co
   def run[A](p: Parser[A])(input: String): Either[ParseError, A]
 
   implicit def string(s: String): Parser[String] // so you can write expressions like "abra" | "cadabra"
+
+  implicit def regex(r: Regex): Parser[String]
 
   implicit def operators[A](p: Parser[A]): ParserOps[A] = ParserOps[A](p)
 
@@ -21,24 +24,29 @@ trait Parsers[Parser[+ _]] { // + _ is a type parameter that is itself a type co
   def succeed[A](a: A): Parser[A] =
     string("") map (_ => a)
 
-  def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]]
+  def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]] =
+    if (n <= 0) succeed(List())
+    else map2(p, listOfN(n - 1, p))(_ :: _)
 
-  def or[A](s1: Parser[A], s2: Parser[A]): Parser[A]
+  def or[A](p1: Parser[A], p2: => Parser[A]): Parser[A]
 
-  def product[A, B](p1: Parser[A], p2: Parser[B]): Parser[(A, B)]
+  def product[A, B](p1: Parser[A], p2: => Parser[B]): Parser[(A, B)]
 
-  def many[A](p: Parser[A]): Parser[List[A]]
+  def many[A](p: Parser[A]): Parser[List[A]] =
+    map2(p, many(p))(_ :: _) or succeed(List())
 
   def many1[A](p: Parser[A]): Parser[List[A]] =
     map2(p, many(p))(_ :: _)
 
-  def map[A, B](a: Parser[A])(f: A => B): Parser[B]
+  def map[A, B](p: Parser[A])(f: A => B): Parser[B]
 
   // return the portion of the input string examined by the parser if successful
   def slice[A](p: Parser[A]): Parser[String]
 
-  def map2[A, B, C](p: Parser[A], p2: Parser[B])(f: (A, B) => C): Parser[C] =
+  def map2[A, B, C](p: Parser[A], p2: => Parser[B])(f: (A, B) => C): Parser[C] =
     map(product(p, p2))(f.tupled) // { case ((a, b)) => f(a, b) }
+
+  def flatMap[A, B](p: Parser[A])(f: A => Parser[B]): Parser[B]
 
   case class ParserOps[A](p: Parser[A]) {
     def |[B >: A](p2: => Parser[B]): Parser[B] = self.or(p, p2)
@@ -53,9 +61,11 @@ trait Parsers[Parser[+ _]] { // + _ is a type parameter that is itself a type co
 
     def many1 = self.many1(p)
 
+    def slice = self.slice(p)
+
     def map[B](f: A => B): Parser[B] = self.map(p)(f)
 
-    def slice = self.slice(p)
+    def flatMap[A, B](f: A => Parser[B]) = self.flatMap(p)(f)
   }
 
   object Laws {
@@ -86,6 +96,8 @@ trait Parsers[Parser[+ _]] { // + _ is a type parameter that is itself a type co
 
   val zeroOrMoreAFollowedByOneOrMoreB =
     char('a').many.slice.map(_.size) ** char('b').many1.slice.map(_.size)
+
+  val thatManyA = regex("[0-9]+".r) flatMap (listOfN(_, char('a')))
 
 }
 
