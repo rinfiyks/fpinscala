@@ -30,7 +30,11 @@ trait Parsers[Parser[+ _]] { // + _ is a type parameter that is itself a type co
 
   def or[A](p1: Parser[A], p2: => Parser[A]): Parser[A]
 
-  def product[A, B](p1: Parser[A], p2: => Parser[B]): Parser[(A, B)]
+  def product[A, B](p1: Parser[A], p2: => Parser[B]): Parser[(A, B)] =
+    p1.flatMap(a => map(p2)(b => (a, b)))
+
+  def map2[A, B, C](p1: Parser[A], p2: => Parser[B])(f: (A, B) => C): Parser[C] =
+    for {a <- p1; b <- p2} yield f(a, b)
 
   def many[A](p: Parser[A]): Parser[List[A]] =
     map2(p, many(p))(_ :: _) or succeed(List())
@@ -38,12 +42,13 @@ trait Parsers[Parser[+ _]] { // + _ is a type parameter that is itself a type co
   def many1[A](p: Parser[A]): Parser[List[A]] =
     map2(p, many(p))(_ :: _)
 
-  def map[A, B](p: Parser[A])(f: A => B): Parser[B]
+  def map[A, B](p: Parser[A])(f: A => B): Parser[B] =
+    p flatMap(a => succeed(f(a)))
 
   // return the portion of the input string examined by the parser if successful
   def slice[A](p: Parser[A]): Parser[String]
 
-  def map2[A, B, C](p: Parser[A], p2: => Parser[B])(f: (A, B) => C): Parser[C] =
+  def map2Old[A, B, C](p: Parser[A], p2: => Parser[B])(f: (A, B) => C): Parser[C] =
     map(product(p, p2))(f.tupled) // { case ((a, b)) => f(a, b) }
 
   def flatMap[A, B](p: Parser[A])(f: A => Parser[B]): Parser[B]
@@ -97,7 +102,7 @@ trait Parsers[Parser[+ _]] { // + _ is a type parameter that is itself a type co
   val zeroOrMoreAFollowedByOneOrMoreB =
     char('a').many.slice.map(_.size) ** char('b').many1.slice.map(_.size)
 
-  val thatManyA = regex("[0-9]+".r) flatMap (listOfN(_, char('a')))
+  val thatManyA = "[0-9]+".r flatMap (listOfN(_, char('a')))
 
 }
 
