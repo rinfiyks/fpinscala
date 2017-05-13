@@ -119,23 +119,17 @@ object Monoid {
       def op(a1: Option[(Boolean, Int, Int)], a2: Option[(Boolean, Int, Int)]): Option[(Boolean, Int, Int)] = {
         (a1, a2) match {
           case (Some((b1, l1, u1)), Some((b2, l2, u2))) => {
-            Some((b1 && b2 && u1 <= l2, l1, u2))
+            Some((b1 && b2 && u1 <= l2, l1 min l2, u1 max u2))
           }
           case (Some(t), None) => Some(t)
           case (None, Some(t)) => Some(t)
         }
       }
+
       def zero: Option[(Boolean, Int, Int)] = None
     }
     foldMapV(ints, creativeMonoid)(i => Some(true, i, i)).map(_._1).getOrElse(true)
   }
-
-
-  sealed trait WC
-
-  case class Stub(chars: String) extends WC
-
-  case class Part(lStub: String, words: Int, rStub: String) extends WC
 
   def par[A](m: Monoid[A]): Monoid[Par[A]] = new Monoid[Par[A]] {
     def op(a: Par[A], b: Par[A]) = a.map2(b)(m.op)
@@ -148,7 +142,22 @@ object Monoid {
       foldMapV(bs, par(m))(b => Par.lazyUnit(b))
     }
 
-  val wcMonoid: Monoid[WC] = sys.error("todo")
+  sealed trait WC
+
+  case class Stub(chars: String) extends WC // can stub be something like "lorem ipsum" ? A: no
+
+  case class Part(lStub: String, words: Int, rStub: String) extends WC
+
+  val wcMonoid: Monoid[WC] = new Monoid[WC] {
+    def op(a1: WC, a2: WC): WC = (a1, a2) match {
+      case (Part(l1, w1, r1), Part(l2, w2, r2)) => Part(l1, w1 + w2 + (if ((r1 + l2).isEmpty) 0 else 1), r2)
+      case (Part(l1, w1, r1), Stub(c)) => Part(l1, w1, r1 + c)
+      case (Stub(c), Part(l2, w2, r2)) => Part(c + l2, w2, r2)
+      case (Stub(c1), Stub(c2)) => Stub(c1 + c2)
+    }
+
+    def zero: WC = Stub("")
+  }
 
   def count(s: String): Int = sys.error("todo")
 
