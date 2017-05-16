@@ -70,7 +70,8 @@ trait Parsers[Parser[+ _]] { // + _ is a type parameter that is itself a type co
 
     def map[B](f: A => B): Parser[B] = self.map(p)(f)
 
-    def flatMap[A, B](f: A => Parser[B]) = self.flatMap(p)(f)
+    def flatMap[B](f: A => Parser[B]) = self.flatMap(p)(f)
+
   }
 
   object Laws {
@@ -87,11 +88,11 @@ trait Parsers[Parser[+ _]] { // + _ is a type parameter that is itself a type co
       equal(p1.map(f) ** p2.map(g), (p1 ** p2).map { case (a, b) => (f(a), g(b)) })(in)
 
     def productAssociativityLaw[A, B, C](p1: Parser[A], p2: Parser[B], p3: Parser[C])(in: Gen[String]): Prop =
-      equal(((p1 ** p2) ** p3) map flatten, (p1 ** (p2 ** p3)) map flatten)(in)
+      equal(((p1 ** p2) ** p3) map flattenL, (p1 ** (p2 ** p3)) map flattenR)(in)
 
-    def flatten[A, B, C](t: ((A, B), C)): (A, B, C) = (t._1._1, t._1._2, t._2)
+    def flattenL[A, B, C](t: ((A, B), C)): (A, B, C) = (t._1._1, t._1._2, t._2)
 
-    def flatten[A, B, C](t: (A, (B, C))): (A, B, C) = (t._1, t._2._1, t._2._2)
+    def flattenR[A, B, C](t: (A, (B, C))): (A, B, C) = (t._1, t._2._1, t._2._2)
 
   }
 
@@ -102,7 +103,7 @@ trait Parsers[Parser[+ _]] { // + _ is a type parameter that is itself a type co
   val zeroOrMoreAFollowedByOneOrMoreB =
     char('a').many.slice.map(_.size) ** char('b').many1.slice.map(_.size)
 
-  val thatManyA = "[0-9]+".r flatMap (listOfN(_, char('a')))
+  //val thatManyA = "[0-9]+".r flatMap (listOfN(_, char('a')))
 
 }
 

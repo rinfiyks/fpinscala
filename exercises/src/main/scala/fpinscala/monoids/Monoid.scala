@@ -123,6 +123,7 @@ object Monoid {
           }
           case (Some(t), None) => Some(t)
           case (None, Some(t)) => Some(t)
+          case _ => None
         }
       }
 
@@ -159,7 +160,17 @@ object Monoid {
     def zero: WC = Stub("")
   }
 
-  def count(s: String): Int = sys.error("todo")
+  def count(s: String): Int = {
+    def charToWC(c: Char): WC = {
+      if (c.isWhitespace) return Part("", 0, "")
+      else return Stub(c.toString)
+    }
+    def countStub(s: String) = s.length min 1
+    foldMapV(s, wcMonoid)(charToWC) match {
+      case Stub(s) => countStub(s)
+      case Part(l, c, r) => countStub(l) + c + countStub(r)
+    }
+  }
 
   def productMonoid[A, B](A: Monoid[A], B: Monoid[B]): Monoid[(A, B)] =
     sys.error("todo")
@@ -252,3 +263,7 @@ object OptionFoldable extends Foldable[Option] {
     sys.error("todo")
 }
 
+object MonoidTester extends App {
+  val s = "Lorem ipsum dolor sit amet, consectetur"
+  print(Monoid.count(s))
+}

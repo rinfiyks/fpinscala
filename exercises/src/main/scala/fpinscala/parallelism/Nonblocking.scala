@@ -41,12 +41,6 @@ object Nonblocking {
           eval(es)(a(es)(cb))
       }
 
-    def parMap[A, B](ps: IndexedSeq[A])(f: A => B): Par[IndexedSeq[B]] =
-      fork {
-        val fbs: IndexedSeq[Par[B]] = ps.map(asyncF(f))
-        sequence(fbs)
-      }
-
     /**
      * Helper function for constructing `Par` values out of calls to non-blocking continuation-passing-style APIs.
      * This will come in handy in Chapter 13.
@@ -110,6 +104,12 @@ object Nonblocking {
 
     def sequence[A](as: List[Par[A]]): Par[List[A]] =
       map(sequenceBalanced(as.toIndexedSeq))(_.toList)
+
+    def parMap[A,B](as: List[A])(f: A => B): Par[List[B]] =
+      sequence(as.map(asyncF(f)))
+
+    def parMap[A,B](as: IndexedSeq[A])(f: A => B): Par[IndexedSeq[B]] =
+      sequenceBalanced(as.map(asyncF(f)))
 
     def parFilter[A](as: List[A])(f: A => Boolean): Par[List[A]] = {
       val ps = as.map(a => lazyUnit(if (f(a)) Some(a) else None))
