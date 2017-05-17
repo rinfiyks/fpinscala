@@ -186,11 +186,18 @@ object Monoid {
     override def zero: A => B = _ => b.zero
   }
 
-  def mapMergeMonoid[K, V](V: Monoid[V]): Monoid[Map[K, V]] =
-    sys.error("todo")
+  def mapMergeMonoid[K, V](v: Monoid[V]): Monoid[Map[K, V]] = new Monoid[Map[K, V]] {
+    override def op(a1: Map[K, V], a2: Map[K, V]): Map[K, V] =
+      (a1.keySet ++ a2.keySet).foldLeft(zero) {
+        (acc, k) => acc.updated(k, v.op(a1.getOrElse(k, v.zero), a2.getOrElse(k, v.zero)))
+      }
 
-  def bag[A](as: IndexedSeq[A]): Map[A, Int] =
-    sys.error("todo")
+    override def zero: Map[K, V] = Map[K, V]()
+  }
+
+  def bag[A](as: IndexedSeq[A]): Map[A, Int] = {
+    foldMapV(as, mapMergeMonoid[A, Int](intAddition))(a => Map(a -> 1))
+  }
 }
 
 trait Foldable[F[_]] {
@@ -286,5 +293,7 @@ object OptionFoldable extends Foldable[Option] {
 
 object MonoidTester extends App {
   val s = "Lorem ipsum dolor sit amet, consectetur"
-  print(Monoid.count(s))
+  println(Monoid.count(s))
+  val b = Monoid.bag(Vector("a", "rose", "is", "a", "rose"))
+  println(b)
 }
