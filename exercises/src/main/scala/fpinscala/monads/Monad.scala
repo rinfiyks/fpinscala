@@ -43,7 +43,20 @@ trait Monad[M[_]] extends Functor[M] {
   def traverse[A, B](la: List[A])(f: A => M[B]): M[List[B]] =
     la.foldRight[M[List[B]]](unit(Nil))((h, t) => map2(f(h), t)(_ :: _))
 
-  def replicateM[A](n: Int, ma: M[A]): M[List[A]] = ???
+  def replicateM[A](n: Int, ma: M[A]): M[List[A]] =
+    sequence(List.fill(n)(ma))
+
+  def product[A, B](ma: M[A], mb: M[B]): M[(A, B)] =
+    map2(ma, mb)((_, _))
+
+  def filterM[A](ms: List[A])(f: A => M[Boolean]): M[List[A]] = ms match {
+    case Nil => unit(Nil)
+    case h :: t => flatMap(f(h)) { b =>
+      if (!b) filterM(t)(f)
+      else map(filterM(t)(f))(h :: _)
+    }
+  }
+
 
   def compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = ???
 
@@ -54,6 +67,14 @@ trait Monad[M[_]] extends Functor[M] {
 
   // Implement in terms of `join`:
   def __flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] = ???
+}
+
+object MonadTester extends App {
+  val i: Seq[List[Int]] = Monad.listMonad.replicateM(2, List(1, 2, 3))
+  i.foreach(println)
+
+  val j = Monad.optionMonad.replicateM(3, Some("test"))
+  j.foreach(println)
 }
 
 case class Reader[R, A](run: R => A)
@@ -100,7 +121,7 @@ object Monad {
 
   def stateMonad[S] = ???
 
-  val idMonad: Monad[Id] = ???
+  // val idMonad: Monad[Id] = ???
 
   def readerMonad[R] = ???
 }
@@ -118,4 +139,3 @@ object Reader {
     override def flatMap[A, B](st: Reader[R, A])(f: A => Reader[R, B]): Reader[R, B] = ???
   }
 }
-
