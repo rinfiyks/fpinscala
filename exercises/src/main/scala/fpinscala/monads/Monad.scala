@@ -1,10 +1,12 @@
 package fpinscala
 package monads
 
+import fpinscala.state.{RNG, State}
 import parsing._
 import testing._
 import parallelism._
 import parallelism.Par._
+
 import language.higherKinds
 
 
@@ -57,24 +59,23 @@ trait Monad[M[_]] extends Functor[M] {
     }
   }
 
-
-  def compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = ???
+  def compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] =
+    a => flatMap(f(a))(g)
 
   // Implement in terms of `compose`:
-  def _flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] = ???
+  def _flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] =
+    compose((_: Unit) => ma, f)(())
 
-  def join[A](mma: M[M[A]]): M[A] = ???
+  def join[A](mma: M[M[A]]): M[A] =
+    flatMap(mma)(ma => ma)
 
   // Implement in terms of `join`:
-  def __flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] = ???
-}
+  def __flatMap[A, B](ma: M[A])(f: A => M[B]): M[B] =
+    join(map(ma)(f))
 
-object MonadTester extends App {
-  val i: Seq[List[Int]] = Monad.listMonad.replicateM(2, List(1, 2, 3))
-  i.foreach(println)
-
-  val j = Monad.optionMonad.replicateM(3, Some("test"))
-  j.foreach(println)
+  // Implement in terms of map and unit
+  def _compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] =
+    a => join(map(f(a))(g))
 }
 
 case class Reader[R, A](run: R => A)
@@ -119,23 +120,44 @@ object Monad {
     def flatMap[A, B](ma: List[A])(f: A => List[B]): List[B] = ma flatMap f
   }
 
-  def stateMonad[S] = ???
+  val idMonad: Monad[Id] = new Monad[Id] {
+    def unit[A](a: => A): Id[A] = Id(a)
 
-  // val idMonad: Monad[Id] = ???
+    def flatMap[A, B](ma: Id[A])(f: (A) => Id[B]): Id[B] = ma flatMap f
+  }
 
-  def readerMonad[R] = ???
+  def stateMonad[S] = new Monad[({type lambda[x] = State[S, x]})#lambda] {
+    def unit[A](a: => A): State[S, A] = State(s => (a, s))
+
+    override def flatMap[A, B](st: State[S, A])(f: A => State[S, B]): State[S, B] =
+      st flatMap f
+  }
+
+  val F = stateMonad[Int]
+
+  def zipWithIndex[A](as: List[A]): List[(Int, A)] =
+    as.foldLeft(F.unit(List[(Int, A)]()))((acc, a) => for {
+      xs <- acc
+      n <- State.get
+      _ <- State.set(n + 1)
+    } yield (n, a) :: xs).run(0)._1.reverse
+
+}
+
+object MonadTester extends App {
 }
 
 case class Id[A](value: A) {
-  def map[B](f: A => B): Id[B] = ???
+  def map[B](f: A => B): Id[B] = Id(f(value))
 
-  def flatMap[B](f: A => Id[B]): Id[B] = ???
+  def flatMap[B](f: A => Id[B]): Id[B] = f(value)
 }
 
 object Reader {
   def readerMonad[R] = new Monad[({type f[x] = Reader[R, x]})#f] {
-    def unit[A](a: => A): Reader[R, A] = ???
+    def unit[A](a: => A): Reader[R, A] = Reader(_ => a)
 
-    override def flatMap[A, B](st: Reader[R, A])(f: A => Reader[R, B]): Reader[R, B] = ???
+    override def flatMap[A, B](st: Reader[R, A])(f: A => Reader[R, B]): Reader[R, B] =
+      Reader(r => f(st.run(r)).run(r))
   }
 }
