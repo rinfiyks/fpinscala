@@ -66,15 +66,9 @@ object Monoid {
     val zero = m.zero
   }
 
-  // TODO: Placeholder for `Prop`. Remove once you have implemented the `Prop`
-  // data type from Part 2.
-  //trait Prop {}
-
-  // TODO: Placeholder for `Gen`. Remove once you have implemented the `Gen`
-  // data type from Part 2.
-
   import fpinscala.testing._
   import Prop._
+
 
   def monoidLaws[A](m: Monoid[A], gen: Gen[A]): Prop =
   // Associativity
@@ -88,7 +82,7 @@ object Monoid {
       forAll(gen)((a: A) =>
         m.op(a, m.zero) == a && m.op(m.zero, a) == a)
 
-  def trimMonoid(s: String): Monoid[String] = sys.error("todo")
+  def trimMonoid(s: String): Monoid[String] = ???
 
   def concatenate[A](as: List[A], m: Monoid[A]): A =
     as.foldLeft(m.zero)(m.op)
@@ -198,6 +192,7 @@ object Monoid {
   def bag[A](as: IndexedSeq[A]): Map[A, Int] = {
     foldMapV(as, mapMergeMonoid[A, Int](intAddition))(a => Map(a -> 1))
   }
+
 }
 
 trait Foldable[F[_]] {
@@ -218,6 +213,7 @@ trait Foldable[F[_]] {
 
   def toList[A](as: F[A]): List[A] =
     foldRight(as)(List[A]())(_ :: _)
+
 }
 
 object ListFoldable extends Foldable[List] {
@@ -229,6 +225,7 @@ object ListFoldable extends Foldable[List] {
 
   override def foldMap[A, B](as: List[A])(f: A => B)(mb: Monoid[B]): B =
     foldLeft(as)(mb.zero)((b, a) => mb.op(b, f(a)))
+
 }
 
 object IndexedSeqFoldable extends Foldable[IndexedSeq] {
@@ -288,7 +285,6 @@ object OptionFoldable extends Foldable[Option] {
     case Some(x) => f(x, z)
     case None => z
   }
-
 }
 
 object MonoidTester extends App {

@@ -166,6 +166,5 @@ object ListTester {
     println(List.hasSubsequence(x, List(1, 5)))
     println(List.hasSubsequence(x, List(6)))
     println(List.hasSubsequence(x, List()))
-
   }
 }
