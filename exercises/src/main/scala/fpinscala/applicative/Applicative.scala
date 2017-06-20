@@ -17,7 +17,7 @@ trait Applicative[F[_]] extends Functor[F] {
   def unit[A](a: => A): F[A]
 
   def map[A, B](fa: F[A])(f: A => B): F[B] =
-    apply(unit(f))(fa)
+    apply[A, B](unit(f))(fa)
 
   def sequence[A](fas: List[F[A]]): F[List[A]] = ???
 
@@ -92,7 +92,8 @@ object Applicative {
 
 trait Traverse[F[_]] extends Functor[F] with Foldable[F] {
   def traverse[G[_]: Applicative, A, B](fa: F[A])(f: A => G[B]): G[F[B]] =
-    sequence(map(fa)(f))
+    sequence[G, B](map(fa)(f))
+  
   def sequence[G[_]: Applicative, A](fma: F[G[A]]): G[F[A]] =
     traverse(fma)(ma => ma)
 
