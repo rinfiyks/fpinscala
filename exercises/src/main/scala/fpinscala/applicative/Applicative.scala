@@ -166,3 +166,51 @@ object StateUtil {
   def set[S](s: S): State[S, Unit] =
     State(_ => ((), s))
 }
+
+object ApplicativeTester extends App {
+
+  optionApplicativeExample()
+  optionMonadExample()
+
+  def AO: Applicative[Option] = new Applicative[Option] {
+    def unit[A](a: => A): Option[A] = Some(a)
+
+    override def apply[A, B](fab: Option[A => B])(fa: Option[A]): Option[B] = fab match {
+      case Some(f) => fa map f
+      case None => None
+    }
+  }
+
+  def MO: Monad[Option] = new Monad[Option] {
+    def unit[A](a: => A): Option[A] = Some(a)
+
+    override def flatMap[A, B](ma: Option[A])(f: A => Option[B]): Option[B] = ma flatMap f
+  }
+
+  private def optionApplicativeExample() = {
+    val depts: Map[String, String] = Map("Alice" -> "CS", "Bob" -> "Maths")
+    val salaries: Map[String, Int] = Map("Alice" -> 40000, "Bob" -> 35000)
+    val employee: String = "Alice"
+
+    val o: Option[String] = AO.map2(depts.get(employee), salaries.get(employee)) {
+      (dept, salary) => s"employee in $dept makes $salary per year"
+    }
+
+    println(o)
+  }
+
+  private def optionMonadExample() = {
+    val idsByName: Map[String, Int] = Map("Alice" -> 1, "Bob" -> 2)
+    val depts: Map[Int, String] = Map(1 -> "CS", 2 -> "Maths")
+    val salaries: Map[Int, Int] = Map(1 -> 40000, 2 -> 35000)
+    val employee = "Bob"
+
+    val o: Option[String] = MO.flatMap(idsByName.get(employee))(id =>
+      AO.map2(depts.get(id), salaries.get(id)) {
+        (dept, salary) => s"$employee in $dept makes $salary per year"
+      })
+
+    println(o)
+  }
+
+}
