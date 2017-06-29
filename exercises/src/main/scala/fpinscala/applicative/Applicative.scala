@@ -64,7 +64,14 @@ trait Monad[F[_]] extends Applicative[F] {
 }
 
 object Monad {
-  def eitherMonad[E]: Monad[({type f[x] = Either[E, x]})#f] = ???
+  def eitherMonad[E] = new Monad[({type f[x] = Either[E, x]})#f] {
+    def unit[A](a: => A): Either[E, A] = Right(a)
+
+    override def flatMap[A, B](ea: Either[E, A])(f: A => Either[E, B]): Either[E, B] = ea match {
+      case Left(e) => Left(e)
+      case Right(a) => f(a)
+    }
+  }
 
   def stateMonad[S] = new Monad[({type f[x] = State[S, x]})#f] {
     def unit[A](a: => A): State[S, A] = State(s => (a, s))
@@ -78,8 +85,7 @@ object Monad {
 
 sealed trait Validation[+E, +A]
 
-case class Failure[E](head: E, tail: Vector[E])
-  extends Validation[E, Nothing]
+case class Failure[E](head: E, tail: Vector[E]) extends Validation[E, Nothing]
 
 case class Success[A](a: A) extends Validation[Nothing, A]
 
@@ -95,7 +101,18 @@ object Applicative {
       a zip b map f.tupled
   }
 
-  def validationApplicative[E]: Applicative[({type f[x] = Validation[E, x]})#f] = ???
+  def validationApplicative[E]: Applicative[({type f[x] = Validation[E, x]})#f] =
+    new Applicative[({type f[x] = Validation[E, x]})#f] {
+      def unit[A](a: => A): Validation[E, A] = Success(a)
+
+      override def map2[A, B, C](va: Validation[E, A], vb: Validation[E, B])(f: (A, B) => C): Validation[E, C] =
+        (va, vb) match {
+          case (Success(a), Success(b)) => Success(f(a, b))
+          case (Failure(eh1, et1), Failure(eh2, et2)) => Failure(eh1, (et1 :+ eh2) ++ et2)
+          case (_, Failure(eh, et)) => Failure(eh, et)
+          case (Failure(eh, et), _) => Failure(eh, et)
+        }
+    }
 
   type Const[A, B] = A
 
@@ -167,7 +184,15 @@ object StateUtil {
     State(_ => ((), s))
 }
 
-object ApplicativeTester extends App {
+object ApplicativeStreamTester extends App {
+  val s1: Stream[Int] = Stream.from(0)
+  val s2: Stream[Int] = Stream.from(1, 3)
+  val s3: Stream[Int] = Stream.from(2, 3)
+  val result = Applicative.streamApplicative.sequence(List(s1, s2, s3))
+  println(result.take(5).toList)
+}
+
+object ApplicativeOptionTester extends App {
 
   optionApplicativeExample()
   optionMonadExample()
