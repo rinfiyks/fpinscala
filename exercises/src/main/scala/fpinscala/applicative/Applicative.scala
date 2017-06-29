@@ -1,12 +1,17 @@
 package fpinscala
 package applicative
 
+import java.text.SimpleDateFormat
+import java.util.Date
+
 import monads.Functor
 import state._
-import StateUtil._ // defined at bottom of this file
+import StateUtil._
 import monoids._
+
 import language.higherKinds
 import language.implicitConversions
+import scala.util.control.NonFatal
 
 trait Applicative[F[_]] extends Functor[F] {
 
@@ -85,7 +90,7 @@ object Monad {
 
 sealed trait Validation[+E, +A]
 
-case class Failure[E](head: E, tail: Vector[E]) extends Validation[E, Nothing]
+case class Failure[E](head: E, tail: Vector[E] = Vector()) extends Validation[E, Nothing]
 
 case class Success[A](a: A) extends Validation[Nothing, A]
 
@@ -239,3 +244,39 @@ object ApplicativeOptionTester extends App {
   }
 
 }
+
+object ApplicativeValidationTester extends App {
+
+  case class WebForm(name: String, birthDate: Date, phoneNumber: String)
+
+  def validateName(name: String): Validation[String, String] = {
+    if (name == null || name.isEmpty) Failure("Name cannot be empty")
+    else Success(name)
+  }
+
+  def validateBirthDate(birthDate: String): Validation[String, Date] =
+    try {
+      Success(new SimpleDateFormat("yyyy-MM-dd").parse(birthDate))
+    } catch {
+      case NonFatal(_) => Failure("Birth date must be in the format yyyy-MM-dd")
+    }
+
+  def validatePhoneNumber(phoneNumber: String): Validation[String, String] = {
+    if (phoneNumber != null && phoneNumber.matches("[0-9]{10,12}")) Success(phoneNumber)
+    else Failure("Phone number must be 10 to 12 digits")
+  }
+
+  def validWebForm(name: String, birthDate: String, phoneNumber: String): Validation[String, WebForm] =
+    Applicative.validationApplicative.map3(
+      validateName(name),
+      validateBirthDate(birthDate),
+      validatePhoneNumber(phoneNumber)
+    )(WebForm)
+
+  println(validWebForm("Alice", "1990-01-01", "07123456789"))
+  println(validWebForm("Bob", "1990/01/01", "07123456789"))
+  println(validWebForm("Carol", "07123456789", "1990-01-01"))
+  println(validWebForm("", "1990-01-01", "07123456789"))
+  println(validWebForm(null, null, null))
+}
+
