@@ -190,13 +190,49 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] {
   def zipWithIndex[A](fa: F[A]): F[(A, Int)] =
     mapAccum(fa, 0)((a, s) => ((a, s), s + 1))._1
 
-  def reverse[A](fa: F[A]): F[A] = ???
+  def reverse[A](fa: F[A]): F[A] =
+    mapAccum(fa, toList(fa).reverse)((_, as) => (as.head, as.tail))._1
 
-  override def foldLeft[A, B](fa: F[A])(z: B)(f: (B, A) => B): B = ???
+  override def foldLeft[A, B](fa: F[A])(z: B)(f: (B, A) => B): B =
+    mapAccum(fa, z)((a, s) => ((), f(s, a)))._2
 
-  def fuse[G[_], H[_], A, B](fa: F[A])(f: A => G[B], g: A => H[B])(implicit G: Applicative[G], H: Applicative[H]): (G[F[B]], H[F[B]]) = ???
+  def zip[A, B](fa: F[A], fb: F[B]): F[(A, B)] =
+    mapAccum(fa, toList(fb)) {
+      case (_, Nil) => sys.error("zip: Incompatible shapes.") // e.g. if F is list, fb.length must be >= fa.length
+      case (a, b :: bs) => ((a, b), bs)
+    }._1
 
-  def compose[G[_]](implicit G: Traverse[G]): Traverse[({type f[x] = F[G[x]]})#f] = ???
+  def zipL[A, B](fa: F[A], fb: F[B]): F[(A, Option[B])] =
+    mapAccum(fa, toList(fb)) {
+      case (a, Nil) => ((a, None), Nil)
+      case (a, b :: bs) => ((a, Some(b)), bs)
+    }._1
+
+  def zipR[A, B](fa: F[A], fb: F[B]): F[(Option[A], B)] =
+    mapAccum(fb, toList(fa)) {
+      case (b, Nil) => ((None, b), Nil)
+      case (b, a :: as) => ((Some(a), b), as)
+    }._1
+
+  def fuse[G[_], H[_], A, B](fa: F[A])(f: A => G[B], g: A => H[B])(implicit G: Applicative[G], H: Applicative[H]): (G[F[B]], H[F[B]]) =
+    traverse[({type f[x] = (G[x], H[x])})#f, A, B](fa)(a => (f(a), g(a)))(G product H)
+
+  def compose[G[_]](implicit G: Traverse[G]): Traverse[({type f[x] = F[G[x]]})#f] = {
+    val self = this
+    new Traverse[({type f[x] = F[G[x]]})#f] {
+      override def traverse[M[_] : Applicative, A, B](fa: F[G[A]])(f: A => M[B]): M[F[G[B]]] =
+        self.traverse(fa)((ga: G[A]) => G.traverse(ga)(f))
+    }
+  }
+
+  def composeM[G[_], H[_]](implicit G: Monad[G], H: Monad[H], T: Traverse[H]): Monad[({type f[x] = G[H[x]]})#f] =
+    new Monad[({type f[x] = G[H[x]]})#f] {
+      def unit[A](a: => A): G[H[A]] = G.unit(H.unit(a))
+
+      override def flatMap[A, B](mna: G[H[A]])(f: A => G[H[B]]): G[H[B]] =
+        G.flatMap(mna)(na => G.map(T.traverse(na)(f))(H.join))
+    }
+
 }
 
 object Traverse {
@@ -229,6 +265,14 @@ object StateUtil {
 
   def set[S](s: S): State[S, Unit] =
     State(_ => ((), s))
+}
+
+case class OptionT[M[_], A](value: M[Option[A]])(implicit M: Monad[M]) {
+  def flatMap[B](f: A => OptionT[M, B]): OptionT[M, B] =
+    OptionT(M.flatMap(value) {
+      case None => M.unit(None)
+      case Some(a) => f(a).value
+    })
 }
 
 object ApplicativeStreamTester extends App {
