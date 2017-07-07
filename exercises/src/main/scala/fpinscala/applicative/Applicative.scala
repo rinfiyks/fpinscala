@@ -106,6 +106,13 @@ object Monad {
       st flatMap f
   }
 
+  type Id[A] = A
+  val idMonad = new Monad[Id] {
+    def unit[A](a: => A) = a
+
+    override def flatMap[A, B](a: A)(f: A => B): B = f(a)
+  }
+
   def composeM[F[_], N[_]](implicit F: Monad[F], N: Monad[N], T: Traverse[N]): Monad[({type f[x] = F[N[x]]})#f] = ???
 }
 
@@ -140,7 +147,7 @@ object Applicative {
         }
     }
 
-  type Const[A, B] = A
+  type Const[M, B] = M
 
   implicit def monoidApplicative[M](M: Monoid[M]) =
     new Applicative[({type f[x] = Const[M, x]})#f] {
@@ -157,7 +164,9 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] {
   def sequence[G[_] : Applicative, A](fma: F[G[A]]): G[F[A]] =
     traverse(fma)(ma => ma)
 
-  def map[A, B](fa: F[A])(f: A => B): F[B] = ???
+
+  def map[A, B](fa: F[A])(f: A => B): F[B] =
+    traverse[Monad.Id, A, B](fa)(f)(Monad.idMonad)
 
   import Applicative._
 
