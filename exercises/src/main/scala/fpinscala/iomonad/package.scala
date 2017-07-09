@@ -1,5 +1,7 @@
 package fpinscala
 
+import fpinscala.iomonad.io.IO3
+
 import language.higherKinds
 
 package object iomonad {

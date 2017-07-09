@@ -1,6 +1,8 @@
 package fpinscala.streamingio
 
-import fpinscala.iomonad.{IO,Monad,Free,unsafePerformIO}
+import fpinscala.iomonad._
+import fpinscala.iomonad.io.IO0
+
 import language.implicitConversions
 import language.higherKinds
 import language.postfixOps
@@ -21,7 +23,7 @@ object ImperativeAndLazyIO {
   def linesGt40k(filename: String): IO[Boolean] = IO {
     // There are a number of convenience functions in scala.io.Source
     // for reading from external sources such as files.
-    val src = io.Source.fromFile(filename)
+    val src = scala.io.Source.fromFile(filename)
     try {
       var count = 0
       // Obtain a stateful iterator from the Source
@@ -70,7 +72,7 @@ object ImperativeAndLazyIO {
                              */
 
   def lines(filename: String): IO[Stream[String]] = IO {
-    val src = io.Source.fromFile(filename)
+    val src = scala.io.Source.fromFile(filename)
     src.getLines.toStream append { src.close; Stream.empty }
   }
                             /*
@@ -380,7 +382,7 @@ object SimpleStreamTransducers {
             go(ss, next, acc)
           case Emit(h, t) => go(ss, t, g(acc, h))
         }
-      val s = io.Source.fromFile(f)
+      val s = scala.io.Source.fromFile(f)
       try go(s.getLines, p, z)
       finally s.close
     }
@@ -651,7 +653,7 @@ object GeneralizedStreamTransducers {
 
     /* Our generalized `Process` type can represent sources! */
 
-    import fpinscala.iomonad.IO
+    import fpinscala.iomonad.io
 
     /* Special exception indicating normal termination */
     case object End extends Exception
@@ -731,7 +733,7 @@ object GeneralizedStreamTransducers {
      */
     def lines(filename: String): Process[IO,String] =
       resource
-        { IO(io.Source.fromFile(filename)) }
+        { IO(scala.io.Source.fromFile(filename)) }
         { src =>
             lazy val iter = src.getLines // a stateful iterator
             def step = if (iter.hasNext) Some(iter.next) else None
@@ -915,12 +917,10 @@ object GeneralizedStreamTransducers {
      * convert the lines of a file from fahrenheit to celsius.
      */
 
-    import fpinscala.iomonad.IO0.fahrenheitToCelsius
-
     val converter: Process[IO,Unit] =
       lines("fahrenheit.txt").
       filter(line => !line.startsWith("#") && !line.trim.isEmpty).
-      map(line => fahrenheitToCelsius(line.toDouble).toString).
+      map(line => IO0.fahrenheitToCelsius(line.toDouble).toString).
       pipe(intersperse("\n")).
       to(fileW("celsius.txt")).
       drain
@@ -981,7 +981,7 @@ object GeneralizedStreamTransducers {
       out <- fileW("celsius.txt").once
       file <- lines("fahrenheits.txt")
       _ <- lines(file).
-           map(line => fahrenheitToCelsius(line.toDouble)).
+           map(line => IO0.fahrenheitToCelsius(line.toDouble)).
            flatMap(celsius => out(celsius.toString))
     } yield ()) drain
 
@@ -992,7 +992,7 @@ object GeneralizedStreamTransducers {
     val convertMultisink: Process[IO,Unit] = (for {
       file <- lines("fahrenheits.txt")
       _ <- lines(file).
-           map(line => fahrenheitToCelsius(line.toDouble)).
+           map(line => IO0.fahrenheitToCelsius(line.toDouble)).
            map(_ toString).
            to(fileW(file + ".celsius"))
     } yield ()) drain
@@ -1005,7 +1005,7 @@ object GeneralizedStreamTransducers {
       file <- lines("fahrenheits.txt")
       _ <- lines(file).
            filter(!_.startsWith("#")).
-           map(line => fahrenheitToCelsius(line.toDouble)).
+           map(line => IO0.fahrenheitToCelsius(line.toDouble)).
            filter(_ > 0). // ignore below zero temperatures
            map(_ toString).
            to(fileW(file + ".celsius"))
@@ -1015,7 +1015,7 @@ object GeneralizedStreamTransducers {
 
 object ProcessTest extends App {
   import GeneralizedStreamTransducers._
-  import fpinscala.iomonad.IO
+  import fpinscala.iomonad.io
   import Process._
 
   val p = eval(IO { println("woot"); 1 }).repeat
