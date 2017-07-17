@@ -26,6 +26,7 @@ object IO2c {
   case class Return[A](a: A) extends Async[A]
 
   case class Suspend[A](resume: Par[A]) extends Async[A] // notice this is a `Par`
+
   case class FlatMap[A, B](sub: Async[A], k: A => Async[B]) extends Async[B]
 
   object Async extends Monad[Async] {

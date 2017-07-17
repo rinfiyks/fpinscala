@@ -27,18 +27,46 @@ object IO3 {
                                  f: A => Free[F, B]) extends Free[F, B]
 
   // Exercise 1: Implement the free monad
-  def freeMonad[F[_]]: Monad[({type f[a] = Free[F, a]})#f] = ???
+  def freeMonad[F[_]]: Monad[({type f[a] = Free[F, a]})#f] = new Monad[({type f[a] = Free[F, a]})#f] {
+    override def unit[A](a: => A): Free[F, A] = Return(a)
+
+    override def flatMap[A, B](a: Free[F, A])(f: A => Free[F, B]): Free[F, B] = a flatMap f
+  }
 
   // Exercise 2: Implement a specialized `Function0` interpreter.
   // @annotation.tailrec
-  def runTrampoline[A](a: Free[Function0, A]): A = ???
+  def runTrampoline[A](a: Free[Function0, A]): A = a match {
+    case Return(a) => a
+    case Suspend(r) => r()
+    case FlatMap(x, f) => x match {
+      case Return(xa) => runTrampoline(f(xa))
+      case Suspend(xr) => runTrampoline(f(xr()))
+      case FlatMap(y, g) => runTrampoline(y flatMap (y => g(y) flatMap f))
+    }
+  }
 
   // Exercise 3: Implement a `Free` interpreter which works for any `Monad`
-  def run[F[_], A](a: Free[F, A])(implicit F: Monad[F]): F[A] = ???
+  /*
+    Hard: Implement a generic interpreter for Free[F,A], given a Monad[F]. You can pattern
+    your implementation after the Async interpreter given previously, including use
+    of a tail-recursive step function.
+   */
+  def run[F[_], A](free: Free[F, A])(implicit F: Monad[F]): F[A] = step(free) match {
+    case Return(a) => F.unit(a)
+    case Suspend(r) => r
+    case FlatMap(x, f) => x match {
+      case Suspend(xr) => F.flatMap(xr)(a => run(f(a)))
+      case _ => sys.error("Impossible, since `step` eliminates these cases")
+    }
+  }
 
   // return either a `Suspend`, a `Return`, or a right-associated `FlatMap`
   // @annotation.tailrec
-  def step[F[_], A](a: Free[F, A]): Free[F, A] = ???
+  def step[F[_], A](free: Free[F, A]): Free[F, A] = free match {
+    case FlatMap(FlatMap(x, f), g) => step(x flatMap (a => f(a) flatMap g))
+    case FlatMap(Return(x), f) => step(f(x))
+    case _ => free
+  }
 
   /*
   The type constructor `F` lets us control the set of external requests our
