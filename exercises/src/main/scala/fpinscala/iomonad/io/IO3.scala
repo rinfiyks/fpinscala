@@ -1,6 +1,7 @@
 package fpinscala.iomonad.io
 
 import fpinscala.iomonad.Monad
+import fpinscala.iomonad.io.IO3.Console.ConsoleIO
 
 import scala.io.StdIn.readLine
 
@@ -34,7 +35,7 @@ object IO3 {
   }
 
   // Exercise 2: Implement a specialized `Function0` interpreter.
-  // @annotation.tailrec
+  @annotation.tailrec
   def runTrampoline[A](a: Free[Function0, A]): A = a match {
     case Return(a) => a
     case Suspend(r) => r()
@@ -61,7 +62,7 @@ object IO3 {
   }
 
   // return either a `Suspend`, a `Return`, or a right-associated `FlatMap`
-  // @annotation.tailrec
+  @annotation.tailrec
   def step[F[_], A](free: Free[F, A]): Free[F, A] = free match {
     case FlatMap(FlatMap(x, f), g) => step(x flatMap (a => f(a) flatMap g))
     case FlatMap(Return(x), f) => step(f(x))
@@ -192,9 +193,20 @@ object IO3 {
   // Exercise 4 (optional, hard): Implement `runConsole` using `runFree`,
   // without going through `Par`. Hint: define `translate` using `runFree`.
 
-  def translate[F[_], G[_], A](f: Free[F, A])(fg: F ~> G): Free[G, A] = ???
+  def translate[F[_], G[_], A](f: Free[F, A])(fg: F ~> G): Free[G, A] = {
+    type FreeG[A] = Free[G, A]
+    val t = new (F ~> FreeG) {
+      override def apply[A](fa: F[A]): FreeG[A] = Suspend(fg(fa))
+    }
+    runFree(f)(t)(freeMonad[G])
+  }
 
-  def runConsole[A](a: Free[Console, A]): A = ???
+  def runConsole[A](a: Free[Console, A]): A =
+    runTrampoline {
+      translate(a)(new (Console ~> Function0) {
+        override def apply[A](f: Console[A]): () => A = f.toThunk
+      })
+    }
 
   /*
   There is nothing about `Free[Console,A]` that requires we interpret
@@ -296,3 +308,4 @@ object IO3 {
     Par.delay(a)
   }
 }
+
