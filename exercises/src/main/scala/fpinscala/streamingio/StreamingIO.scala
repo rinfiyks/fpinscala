@@ -145,7 +145,15 @@ input (`Await`) or signaling termination via `Halt`.
     /*
      * Exercise 5: Implement `|>`. Let the types guide your implementation.
      */
-    def |>[O2](p2: Process[O, O2]): Process[I, O2] = ???
+    def |>[O2](p2: Process[O, O2]): Process[I, O2] = p2 match {
+      case Halt() => Halt()
+      case Emit(hO2, tO: Process[O, O2]) => Emit(hO2, this |> tO)
+      case Await(rectO: (Option[O] => Process[O, O2])) => this match {
+        case Halt() => Halt() |> rectO(None)
+        case Emit(hO, tI: Process[I, O]) => tI |> rectO(Some(hO))
+        case Await(rectI: (Option[I] => Process[I, O])) => Await((i: Option[I]) => rectI(i) |> p2)
+      }
+    }
 
     /*
      * Feed `in` to this `Process`. Uses a tail recursive loop as long
@@ -209,10 +217,14 @@ input (`Await`) or signaling termination via `Halt`.
     def filter(f: O => Boolean): Process[I, O] =
       this |> Process.filter(f)
 
+    def zip[O2](p: Process[I, O2]): Process[I, (O, O2)] =
+      Process.zip(this, p)
+
     /*
      * Exercise 6: Implement `zipWithIndex`.
      */
-    def zipWithIndex: Process[I, (O, Int)] = ???
+    def zipWithIndex: Process[I, (O, Int)] =
+      this.zip(count.map(_ - 1))
 
     /* Add `p` to the fallback branch of this process */
     def orElse(p: Process[I, O]): Process[I, O] = this match {
@@ -331,7 +343,8 @@ input (`Await`) or signaling termination via `Halt`.
     /*
      * Exercise 2: Implement `count`.
      */
-    def count[I]: Process[I, Int] = ???
+    def count[I]: Process[I, Int] =
+      lift((i: I) => 1.0) |> sum |> lift(_.toInt)
 
     /* For comparison, here is an explicit recursive implementation. */
     def count2[I]: Process[I, Int] = {
@@ -367,11 +380,29 @@ input (`Await`) or signaling termination via `Halt`.
     def countViaLoop[I]: Process[I, Int] =
       loop(0)((_, n) => (n + 1, n + 1))
 
+    def or: Process[Boolean, Boolean] =
+      loop(false)((a, b) => (a || b, a || b))
+
+    def and: Process[Boolean, Boolean] =
+      loop(true)((a, b) => (a && b, a && b))
+
     /*
      * Exercise 7: Can you think of a generic combinator that would
      * allow for the definition of `mean` in terms of `sum` and
      * `count`?
      */
+
+    def zip[A, B, C](p1: Process[A, B], p2: Process[A, C]): Process[A, (B, C)] =
+      (p1, p2) match {
+        case (Halt(), _) => Halt()
+        case (_, Halt()) => Halt()
+        case (Emit(b, t1), Emit(c, t2)) => Emit((b, c), zip(t1, t2))
+        case (Await(recv1), _) =>
+          Await((oa: Option[A]) => zip(recv1(oa), feed(oa)(p2)))
+        case (_, Await(recv2)) =>
+          Await((oa: Option[A]) => zip(feed(oa)(p1), recv2(oa)))
+      }
+
 
     def feed[A, B](oa: Option[A])(p: Process[A, B]): Process[A, B] =
       p match {
@@ -392,7 +423,8 @@ input (`Await`) or signaling termination via `Halt`.
      * We choose to emit all intermediate values, and not halt.
      * See `existsResult` below for a trimmed version.
      */
-    def exists[I](f: I => Boolean): Process[I, Boolean] = ???
+    def exists[I](f: I => Boolean): Process[I, Boolean] =
+      lift(f) |> or
 
     /* Awaits then emits a single value, then halts. */
     def echo[I]: Process[I, I] = await(i => emit(i))

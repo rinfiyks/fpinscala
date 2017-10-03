@@ -4,7 +4,7 @@ import SimpleStreamTransducers.Process
 
 object StreamingIOApp extends App {
 
-  val res1 = Process.count2(Stream(0, 0, 0, 0, 0))
+  val res1 = Process.count(Stream(0, 0, 0, 0, 0))
   println(res1.toList)
 
   val res2: Stream[Double] = Process.mean(Stream(10.0, 20.0, 40.0))
@@ -13,6 +13,13 @@ object StreamingIOApp extends App {
   val res3 = Process.sumViaLoop(Stream(1, 2, 3, 4, 5, 6))
   println(res3.toList)
 
-  val res4 = Process.countViaLoop(Stream(10, 10, 10, 10, 10))
+  val res4 = Process.countViaLoop(Stream(10, 10, 10, 10, 10, 10)).filter(_ % 2 == 1)
   println(res4.toList)
+
+  val pipe: Process[Int, Int] = Process.countViaLoop |> Process.filter(_ % 2 == 1)
+  val res5 = pipe(Stream(10, 10, 10, 10, 10, 10))
+  println(res5.toList)
+
+  val res6 = (Process.count |> Process.exists(_ % 10 == 0))(Stream.continually(1).take(20))
+  println(res6.toList)
 }
