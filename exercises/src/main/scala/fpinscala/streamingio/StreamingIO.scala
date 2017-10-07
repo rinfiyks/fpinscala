@@ -436,7 +436,7 @@ input (`Await`) or signaling termination via `Halt`.
     def terminated[I]: Process[I, Option[I]] =
       await((i: I) => emit(Some(i), terminated[I]), emit(None))
 
-    def processFile[A, B](f: java.io.File,
+    def processFile[A, B](in: java.io.InputStream,
                           p: Process[String, A],
                           z: B)(g: (B, A) => B): IO[B] = IO {
       @annotation.tailrec
@@ -450,7 +450,7 @@ input (`Await`) or signaling termination via `Halt`.
           case Emit(h, t) => go(ss, t, g(acc, h))
         }
 
-      val s = scala.io.Source.fromFile(f)
+      val s = scala.io.Source.fromInputStream(in)
       try go(s.getLines, p, z)
       finally s.close
     }
@@ -460,7 +460,7 @@ input (`Await`) or signaling termination via `Halt`.
      * converts each temperature to celsius, and writes results to another file.
      */
 
-    def toCelsius(fahrenheit: Double): Double =
+    private def toCelsius(fahrenheit: Double): Double =
       (5.0 / 9.0) * (fahrenheit - 32.0)
   }
 
