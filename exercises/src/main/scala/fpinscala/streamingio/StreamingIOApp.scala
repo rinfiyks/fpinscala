@@ -1,5 +1,6 @@
 package fpinscala.streamingio
 
+import java.io.File
 import java.util.concurrent.{ExecutorService, Executors}
 
 import fpinscala.iomonad.IO
@@ -41,6 +42,15 @@ object StreamingIOApp extends App {
     List.empty[Int])((b, a) => a +: b)
   val res8: List[Int] = unsafePerformIO(io2)
   println(res8)
+
+  val inputStream3 = getClass.getResource("/fpinscala/streamingio/fahrenheit_list.txt").openStream()
+  val io3 = processFile(inputStream3,
+    lift(identity),
+    List.empty[String])((b, a) => a +: b)
+  val res9: List[String] = unsafePerformIO(io3).reverse
+  println(res9)
+  val io4 = toFile(new File("/tmp/f_to_c.txt"), fahrenheitToCelsuis, res9)
+  unsafePerformIO(io4)
 
   def unsafePerformIO[A](io: IO[A])(implicit E: ExecutorService): A =
     Par.run(E) {

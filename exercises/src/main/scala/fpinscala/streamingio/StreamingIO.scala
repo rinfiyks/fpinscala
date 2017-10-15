@@ -460,6 +460,33 @@ input (`Await`) or signaling termination via `Halt`.
      * converts each temperature to celsius, and writes results to another file.
      */
 
+    def toFile[A](f: java.io.File, p: Process[A, String], ss: List[A]): IO[Unit] =
+      IO {
+        import java.io.{BufferedWriter, FileWriter}
+        val bw = new BufferedWriter(new FileWriter(f))
+
+        @annotation.tailrec
+        def go(ss: List[A], cur: Process[A, String]): Unit = cur match {
+          case Halt() => Unit
+          case Await(recv) => ss match {
+            case h :: t => go(t, recv(Some(h)))
+            case Nil => go(ss, recv(None))
+          }
+          case Emit(h, t) =>
+            bw.write(h)
+            bw.newLine()
+            go(ss, t)
+        }
+
+        try go(ss, p)
+        finally bw.close()
+      }
+
+    def fahrenheitToCelsuis: Process[String, String] =
+      filter((line: String) => !line.startsWith("#")) |>
+        filter(line => !line.isEmpty) |>
+        lift(line => toCelsius(line.toDouble).toString)
+
     private def toCelsius(fahrenheit: Double): Double =
       (5.0 / 9.0) * (fahrenheit - 32.0)
   }
