@@ -604,7 +604,17 @@ that all resources get released, even in the event of exceptions.
      * below, this is not tail recursive and responsibility for stack safety
      * is placed on the `Monad` instance.
      */
-    def runLog(implicit F: MonadCatch[F]): F[IndexedSeq[O]] = ???
+    def runLog(implicit F: MonadCatch[F]): F[IndexedSeq[O]] = {
+      def go(cur: Process[F, O], acc: IndexedSeq[O]): F[IndexedSeq[O]] =
+        cur match {
+          case Emit(h, t) => go(t, acc :+ h)
+          case Halt(End) => F.unit(acc)
+          case Halt(err) => F.fail(err)
+          case Await(req, recv) => F.flatMap(F.attempt(req)) { e => go(Try(recv(e)), acc) }
+        }
+
+      go(this, IndexedSeq())
+    }
 
     /*
      * We define `Process1` as a type alias - see the companion object
@@ -863,10 +873,15 @@ that all resources get released, even in the event of exceptions.
       }
 
     /* Exercise 11: Implement `eval`, `eval_`, and use these to implement `lines`. */
-    def eval[F[_], A](a: F[A]): Process[F, A] = ???
+    def eval[F[_], A](a: F[A]): Process[F, A] =
+      await[F, A, A](a) {
+        case Left(err) => Halt(err)
+        case Right(a) => Emit(a, Halt(End))
+      }
 
     /* Evaluate the action purely for its effects. */
-    def eval_[F[_], A, B](a: F[A]): Process[F, B] = ???
+    def eval_[F[_], A, B](a: F[A]): Process[F, B] =
+      eval[F, A](a).drain[B]
 
     /* Helper function with better type inference. */
     def evalIO[A](a: IO[A]): Process[IO, A] =
@@ -1042,7 +1057,8 @@ definition of `to` in `Process` for an example of how to feed a
       eval(IO(a)).flatMap { a => Emit(a, constant(a)) }
 
     /* Exercise 12: Implement `join`. Notice this is the standard monadic combinator! */
-    def join[F[_], A](p: Process[F, Process[F, A]]): Process[F, A] = ???
+    def join[F[_], A](p: Process[F, Process[F, A]]): Process[F, A] =
+      p.flatMap(pa => pa)
 
     /*
      * An example use of the combinators we have so far: incrementally
